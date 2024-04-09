@@ -161,6 +161,14 @@ class Device(object):
             else:
                 self.service_data[k] = v
 
+    lastSent: float
+
+    def setLastSent(self, timestamp: float):
+        self.lastSent = timestamp
+
+    def getLastSent(self) -> float:
+        return self.lastSent
+
     def __init__(self,
                  path: str, address: str,
                  paired: bool, connected: bool, services_resolved: bool,
@@ -184,6 +192,8 @@ class Device(object):
         self.first_seen = datetime.datetime.now()
         self.last_seen = datetime.datetime.now()
         self.services: MutableMapping[str, GATTService] = dict()
+
+        self.lastSent = 0.0
 
         self.manufacturer_data = dict()
         if manufacturer_data is not None:

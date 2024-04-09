@@ -33,7 +33,7 @@ class Main:
 
     def __init__(self):
         parser = argparse.ArgumentParser(
-            prog="btlesniffer",
+            prog="main.py",
             description="Scan for Bluetooth Low Energy devices and gather "
                         "information about them. This program will only run on "
                         "Linux systems."
@@ -48,6 +48,12 @@ class Main:
             "-d", "--debug",
             action="store_true",
             help="enable debugging features"
+        )
+        parser.add_argument(
+            "--minimum-interval",
+            type=float,
+            default=10.0,
+            help="the minimum amount of time between requests for a single device in seconds"
         )
         parser.add_argument(
             "--threshold-rssi",
@@ -88,7 +94,9 @@ class Main:
         grpc_thread.setDaemon(True)
 
         try:
-            with Sniffer(logging.getLogger(), 
+            with Sniffer(logging.getLogger(),
+                        messageQueue,
+                        self.args.minimum_interval,
                         self.args.threshold_rssi) as sniffer:
                 grpc_thread.start()
                 sniffer.run()

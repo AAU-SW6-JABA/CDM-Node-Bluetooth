@@ -50,11 +50,7 @@ class GrpcRoutes():
                     timestamp = message.timestamp,
                     signal_strength = message.signal_strength
                 )
-
-                print("Sent request")
-
                 await self.log_measurement(requestMessage)
-
                 self.dataQueue.task_done()
         
 

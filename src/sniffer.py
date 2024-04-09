@@ -25,10 +25,16 @@ class Sniffer(object):
     Capture reachable Bluetooth devices and attempt to fingerprint them.
     """
 
-    def __init__(self, logger: logging.Logger, messageQueue: Queue, threshold_rssi=-80):
+    _log: logging.Logger
+    messageQueue: Queue
+    threshold_rssi: int
+    minimum_interval: float
+
+    def __init__(self, logger: logging.Logger, messageQueue: Queue, minimum_interval: float, threshold_rssi=-80):
         self._log = logger
-        self.threshold_rssi = threshold_rssi
         self.messageQueue = messageQueue
+        self.minimum_interval = minimum_interval
+        self.threshold_rssi = threshold_rssi
         self.adapter = None
         self.registry = list()
 
@@ -128,7 +134,6 @@ class Sniffer(object):
             device = self._find_device_by_path(obj)
             if device is not None:
                 device.update_from_dbus_dict(obj, params[1])
-                print(f'Updated properties for {device.address}')
                 self.addToQueue(device)
             else:
                 self._log.debug("Received PropertiesChanged for an "
@@ -197,17 +202,19 @@ class Sniffer(object):
     def _find_device_by_path(self, path) -> Device:
         for d in self.registry:
             if path == d.path:
-                print(d)
                 return d
             
     def addToQueue(self, device: Device):
-        identifier: str = device.address
-        signal_dbm: float = device.rssis[device.rssis.count - 1]
+        if device.lastSent is None or time.time() - device.getLastSent() > self.minimum_interval:
+            identifier: str = device.address
+            signal_dbm: float = float(device.rssis[-1])
 
-        # Create grpc message and
-        grpc_message = Message(
-            identifier=identifier,
-            timestamp=time.time(),
-            signal_strength=signal_dbm)
-        
-        self.messageQueue.put(grpc_message)
+            # Create grpc message and
+            grpc_message = Message(
+                identifier=identifier,
+                timestamp=time.time(),
+                signal_strength=signal_dbm)
+            
+            device.setLastSent(time.time())
+
+            self.messageQueue.put(grpc_message)
