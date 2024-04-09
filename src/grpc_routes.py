@@ -25,6 +25,11 @@ class GrpcRoutes():
         self.coordinate_x = coordinate_x
         self.coordinate_y = coordinate_y
 
+    def startThread(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        asyncio.get_event_loop().run_until_complete(self.run())
+
     async def run(self):
         async with grpc.aio.insecure_channel(self.address) as channel:
             self.stub = RoutesStub(channel)
@@ -33,6 +38,8 @@ class GrpcRoutes():
             self.antenna_id = await self.register_antenna(self.coordinate_x, self.coordinate_y)
             if self.antenna_id < 0:
                 raise Exception("Failed to register antenna")
+            
+            print(f'Registered antenna with id: {self.antenna_id}')
 
             while True:
                 message: Message = self.dataQueue.get(True)
@@ -44,7 +51,11 @@ class GrpcRoutes():
                     signal_strength = message.signal_strength
                 )
 
+                print("Sent request")
+
                 await self.log_measurement(requestMessage)
+
+                self.dataQueue.task_done()
         
 
     async def register_antenna(self, x: float, y: float) -> int:

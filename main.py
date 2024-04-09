@@ -12,6 +12,7 @@ import argparse
 import logging
 from dotenv import load_dotenv
 from queue import Queue
+from threading import Thread
 
 from src.sniffer import Sniffer
 from src.grpc_routes import GrpcRoutes
@@ -26,6 +27,7 @@ class Main:
     grpcRoutes: GrpcRoutes
     sniffer: Sniffer
     address: str
+    antenna_id: int
     x_coordinate: float
     y_coordinate: float
 
@@ -54,13 +56,6 @@ class Main:
             help="the lower bound received signal strength (RSSI) at which to "
                 "attempt to connect to devices (in dBa, default -80 dBa)."
         )
-        parser.add_argument(
-            "--connection-polling-interval",
-            type=int,
-            default=5,
-            help="how frequently the sniffer shall go through the device registry "
-                "and attempt to establish connections (in seconds, default 5 s)."
-        )
         self.args = parser.parse_args()
 
         if sys.platform != REQUIRE_PLATFORM:
@@ -81,17 +76,24 @@ class Main:
         self.x_coordinate = float(os.getenv("LOCATION_X"))
         self.y_coordinate = float(os.getenv("LOCATION_Y"))
 
+        if not self.address:
+            raise Exception("Failed to load address")
+
 
 
     def run(self):
+        # asyncio.get_event_loop().run_until_complete(())
+        self.grpcRoutes = GrpcRoutes(messageQueue, self.address, self.x_coordinate, self.y_coordinate)
+        grpc_thread = Thread(target=self.grpcRoutes.startThread)
+        grpc_thread.setDaemon(True)
+
         try:
-            self.grpcRoutes = GrpcRoutes(messageQueue, self.address, self.x_coordinate, self.y_coordinate)
             with Sniffer(logging.getLogger(), 
-                        self.args.threshold_rssi,
-                        self.args.connection_polling_interval) as sniffer:
+                        self.args.threshold_rssi) as sniffer:
+                grpc_thread.start()
                 sniffer.run()
-                asyncio.get_event_loop().run_until_complete(self.grpcRoutes.run())
         except KeyboardInterrupt:
+            messageQueue.join()
             pass
 
 

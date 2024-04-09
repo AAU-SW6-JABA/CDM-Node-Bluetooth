@@ -6,9 +6,12 @@ devices.
 """
 
 import logging
-
 import pydbus
 from gi.repository import GLib
+from queue import Queue
+import time
+
+from .Message import Message
 
 from .util import SERVICE_NAME, DEVICE_INTERFACE, OBJECT_MANAGER_INTERFACE, \
     PROPERTIES_INTERFACE, find_adapter, GATT_SERVICE_INTERFACE, \
@@ -21,6 +24,35 @@ class Sniffer(object):
     """
     Capture reachable Bluetooth devices and attempt to fingerprint them.
     """
+
+    def __init__(self, logger: logging.Logger, messageQueue: Queue, threshold_rssi=-80):
+        self._log = logger
+        self.threshold_rssi = threshold_rssi
+        self.messageQueue = messageQueue
+        self.adapter = None
+        self.registry = list()
+
+    def __enter__(self):
+        self._log.debug("Choosing the first available Bluetooth adapter and "
+                        "starting device discovery.")
+        self._log.debug("The discovery filter is set to Bluetooth LE only.")
+        try:
+            self.adapter = find_adapter()
+            self.adapter.SetDiscoveryFilter({"Transport": pydbus.Variant("s", "le")})
+            self.adapter.StartDiscovery()
+        except GLib.Error as ex:
+            self._log.exception("Is the bluetooth controller powered on? "
+                                "Use `bluetoothctl`, `power on` otherwise.")
+            raise ex
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.adapter is not None:
+            self._log.debug("Stopping device discovery.")
+            self.adapter.StopDiscovery()
+
+        return False
+
     def run(self):
         """
         Run the Sniffer main loop.
@@ -96,6 +128,8 @@ class Sniffer(object):
             device = self._find_device_by_path(obj)
             if device is not None:
                 device.update_from_dbus_dict(obj, params[1])
+                print(f'Updated properties for {device.address}')
+                self.addToQueue(device)
             else:
                 self._log.debug("Received PropertiesChanged for an "
                                 "unknown device.")
@@ -108,6 +142,8 @@ class Sniffer(object):
         else:
             self.registry.append(device)
             print_device(device, "New")
+        
+        self.addToQueue(device)
 
     def _register_service(self, path, service):
         device_path = service["Device"]
@@ -153,62 +189,25 @@ class Sniffer(object):
         else:
             self._log.debug("Received a descriptor for an unknown device.")
 
-    def _connect(self, device):
-        def cb_connect():
-            try:
-                bus = pydbus.SystemBus()
-                proxy = bus.get(SERVICE_NAME, device.path)
-                proxy.Connect()
-            except KeyError:
-                self._log.debug("The device has likely disappeared.", exc_info=True)
-            except GLib.Error:
-                self._log.debug("Connect() failed:", exc_info=True)
-            else:
-                self._log.info("Connection successful.")
-
-            self.queued_connections -= 1
-
-        if self.queued_connections == 0:
-            print_device(device, "Connecting")
-            GLib.idle_add(cb_connect)
-            device.connected = True
-            self.queued_connections += 1
-
-    def _find_device(self, device):
+    def _find_device(self, device) -> Device:
         for d in self.registry:
             if device == d:
                 return d
 
-    def _find_device_by_path(self, path):
+    def _find_device_by_path(self, path) -> Device:
         for d in self.registry:
             if path == d.path:
+                print(d)
                 return d
+            
+    def addToQueue(self, device: Device):
+        identifier: str = device.address
+        signal_dbm: float = device.rssis[device.rssis.count - 1]
 
-    def __init__(self, logger: logging.Logger, threshold_rssi=-80, queueing_interval=5):
-        self._log = logger
-        self.threshold_rssi = threshold_rssi
-        self.queueing_interval = queueing_interval
-        self.queued_connections = 0
-        self.adapter = None
-
-    def __enter__(self):
-        self._log.debug("Choosing the first available Bluetooth adapter and "
-                        "starting device discovery.")
-        self._log.debug("The discovery filter is set to Bluetooth LE only.")
-        try:
-            self.adapter = find_adapter()
-            self.adapter.SetDiscoveryFilter({"Transport": pydbus.Variant("s", "le")})
-            self.adapter.StartDiscovery()
-        except GLib.Error as ex:
-            self._log.exception("Is the bluetooth controller powered on? "
-                                "Use `bluetoothctl`, `power on` otherwise.")
-            raise ex
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.adapter is not None:
-            self._log.debug("Stopping device discovery.")
-            self.adapter.StopDiscovery()
-
-        return False
-
+        # Create grpc message and
+        grpc_message = Message(
+            identifier=identifier,
+            timestamp=time.time(),
+            signal_strength=signal_dbm)
+        
+        self.messageQueue.put(grpc_message)
