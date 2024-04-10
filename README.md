@@ -1,6 +1,6 @@
 # Crowd-Density-Monitoring: IMSI-sniffer
 
-This piece of software is meant to run on the "nodes" of the CDM (Crowd Density Monitoring) system. It'
+This piece of software is meant to run on the "nodes" of the CDM (Crowd Density Monitoring) system.
 
 ## Setup
 
