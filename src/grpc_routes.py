@@ -1,6 +1,6 @@
 import logging
 import grpc
-from threading import Thread, Timer
+from threading import Thread
 from queue import Queue
 from src.Message import Message
 import asyncio
@@ -56,8 +56,8 @@ class GrpcRoutes():
         except:
             timeout = 2
             print(f"Failed to connect to server. Retrying in {timeout} seconds")
-            Timer(timeout, self.run()).start()
-
+            await asyncio.sleep(timeout)
+            await self.run()
         
 
     async def register_antenna(self, x: float, y: float) -> int:
