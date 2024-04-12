@@ -31,27 +31,33 @@ class GrpcRoutes():
         asyncio.get_event_loop().run_until_complete(self.run())
 
     async def run(self):
-        async with grpc.aio.insecure_channel(self.address) as channel:
-            self.stub = RoutesStub(channel)
+        try:
+            async with grpc.aio.insecure_channel(self.address) as channel:
+                self.stub = RoutesStub(channel)
 
-            # Registering antenna
-            self.antenna_id = await self.register_antenna(self.coordinate_x, self.coordinate_y)
-            if self.antenna_id < 0:
-                raise Exception("Failed to register antenna")
-            
-            print(f'Registered antenna with id: {self.antenna_id}')
+                # Registering antenna
+                self.antenna_id = await self.register_antenna(self.coordinate_x, self.coordinate_y)
+                if self.antenna_id < 0:
+                    raise Exception("Failed to register antenna")
+                
+                print(f'Registered antenna with id: {self.antenna_id}')
 
-            while True:
-                message: Message = self.dataQueue.get(True)
+                while True:
+                    message: Message = self.dataQueue.get(True)
 
-                requestMessage: LogMeasurementRequest = LogMeasurementRequest(
-                    aid = self.antenna_id,
-                    identifier = message.identifier,
-                    timestamp = message.timestamp,
-                    signal_strength = message.signal_strength
-                )
-                await self.log_measurement(requestMessage)
-                self.dataQueue.task_done()
+                    requestMessage: LogMeasurementRequest = LogMeasurementRequest(
+                        aid = self.antenna_id,
+                        identifier = message.identifier,
+                        timestamp = message.timestamp,
+                        signal_strength = message.signal_strength
+                    )
+                    await self.log_measurement(requestMessage)
+                    self.dataQueue.task_done()
+        except:
+            timeout = 2
+            print(f"Failed to connect to server. Retrying in {timeout} seconds")
+            await asyncio.sleep(timeout)
+            await self.run()
         
 
     async def register_antenna(self, x: float, y: float) -> int:

@@ -91,7 +91,7 @@ class Main:
         # asyncio.get_event_loop().run_until_complete(())
         self.grpcRoutes = GrpcRoutes(messageQueue, self.address, self.x_coordinate, self.y_coordinate)
         grpc_thread = Thread(target=self.grpcRoutes.startThread)
-        grpc_thread.setDaemon(True)
+        grpc_thread.isDaemon = True
 
         try:
             with Sniffer(logging.getLogger(),
