@@ -1,6 +1,6 @@
 import logging
 import grpc
-from threading import Thread
+from threading import Thread, Timer
 from queue import Queue
 from src.Message import Message
 import asyncio
@@ -54,7 +54,9 @@ class GrpcRoutes():
                     await self.log_measurement(requestMessage)
                     self.dataQueue.task_done()
         except:
-            self.run()
+            timeout = 2
+            print(f"Failed to connect to server. Retrying in {timeout} seconds")
+            Timer(timeout, self.run()).start()
 
         
 
