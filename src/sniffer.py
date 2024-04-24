@@ -123,7 +123,8 @@ class Sniffer(object):
         device = self._find_device_by_path(path)
         if device is not None:
             device.active = False
-            print_device(device, "Lost")
+            if "RSSI" in params[1] and params[1]["RSSI"] > self.threshold_rssi:
+                print_device(device, "Lost")
 
     def _cb_properties_changed(self, sender, obj, iface, signal, params):
         """
