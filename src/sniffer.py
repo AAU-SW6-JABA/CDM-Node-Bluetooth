@@ -30,7 +30,7 @@ class Sniffer(object):
     threshold_rssi: int
     minimum_interval: float
 
-    def __init__(self, logger: logging.Logger, messageQueue: Queue, minimum_interval: float, threshold_rssi=-80):
+    def __init__(self, logger: logging.Logger, messageQueue: Queue, minimum_interval: float, threshold_rssi: int):
         self._log = logger
         self.messageQueue = messageQueue
         self.minimum_interval = minimum_interval
@@ -133,22 +133,28 @@ class Sniffer(object):
         if DEVICE_INTERFACE in params:
             device = self._find_device_by_path(obj)
             if device is not None:
-                device.update_from_dbus_dict(obj, params[1])
-                self.addToQueue(device)
+                if "RSSI" in params[1] and params[1]["RSSI"] > self.threshold_rssi:
+                    device.update_from_dbus_dict(obj, params[1])
+                    self.addToQueue(device)
             else:
                 self._log.debug("Received PropertiesChanged for an "
                                 "unknown device.")
 
     def _register_device(self, device):
+        deviceWithinThreshold = device.rssis[-1] > self.threshold_rssi
+
         d = self._find_device(device)
         if d is not None:
             d.update_from_device(device)
-            print_device(d, "Merge")
+            if deviceWithinThreshold:
+                print_device(d, "Merge")
         else:
             self.registry.append(device)
-            print_device(device, "New")
-        
-        self.addToQueue(device)
+            if deviceWithinThreshold:
+                print_device(device, "New")
+
+        if deviceWithinThreshold:
+            self.addToQueue(device)
 
     def _register_service(self, path, service):
         device_path = service["Device"]
