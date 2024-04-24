@@ -52,7 +52,7 @@ class Main:
         parser.add_argument(
             "--minimum-interval",
             type=float,
-            default=10.0,
+            default=1.0,
             help="the minimum amount of time between requests for a single device in seconds"
         )
         parser.add_argument(
